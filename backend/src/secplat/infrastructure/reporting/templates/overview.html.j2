@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>{{ model.title }}</title>
+<style>
+body { font-family: "DejaVu Sans", sans-serif; font-size: 11pt; color: #222; margin: 0; }
+.page { padding: 40px 48px; }
+h1 { font-size: 20pt; margin: 0 0 4px; }
+.muted { color: #777; font-size: 9pt; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+td, th { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 10pt; }
+th { background: #f2f2f2; }
+.num { text-align: right; }
+.footer { margin-top: 40px; border-top: 1px solid #ddd; padding-top: 8px; color: #888; font-size: 8pt; }
+@page { size: A4 landscape; margin: 14mm; @bottom-right { content: "Sayfa " counter(page) " / " counter(pages); font-size: 8pt; color: #999; } }
+</style>
+</head>
+<body>
+<div class="page">
+<h1>{{ model.title }}</h1>
+<p class="muted">Rapor tarihi: {{ model.generated_at|trdt }} — {{ model.projects_reported }} proje</p>
+
+{% if model.rows %}
+<table>
+  <thead>
+    <tr>
+      <th>Proje</th>
+      <th>Skor</th>
+      <th>Not</th>
+      <th>Toplam</th>
+      <th>Kritik</th>
+      <th>Yüksek</th>
+      <th>Orta</th>
+      <th>Düşük</th>
+      <th>Bilgi</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in model.rows %}
+    <tr>
+      <td><strong>{{ row.project_name }}</strong></td>
+      <td class="num"><strong>{{ row.security_score }}/100</strong></td>
+      <td style="text-align: center;"><strong>{{ row.grade }}</strong></td>
+      <td class="num"><strong>{{ row.total_findings }}</strong></td>
+      <td class="num">{{ row.counts_by_severity.get("critical", 0) }}</td>
+      <td class="num">{{ row.counts_by_severity.get("high", 0) }}</td>
+      <td class="num">{{ row.counts_by_severity.get("medium", 0) }}</td>
+      <td class="num">{{ row.counts_by_severity.get("low", 0) }}</td>
+      <td class="num">{{ row.counts_by_severity.get("info", 0) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>Tamamlanan taraması olan proje bulunmadı.</p>
+{% endif %}
+
+<div class="footer">SecPlat — sayılar her araç ve hedef için son tamamlanan taramaya göredir.</div>
+</div>
+</body>
+</html>
