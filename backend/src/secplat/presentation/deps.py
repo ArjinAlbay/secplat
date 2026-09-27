@@ -23,6 +23,7 @@ from secplat.application.scanning.commands import (
     StartScan,
 )
 from secplat.application.scanning.queries import (
+    CompareScans,
     GetScan,
     ListProjectScans,
     ListRecentScans,
@@ -122,6 +123,11 @@ def get_list_scan_results(scans: ScanRepository = Depends(get_scan_repo)) -> Lis
 
 def get_list_scan_findings(scans: ScanRepository = Depends(get_scan_repo)) -> ListScanFindings:
     return ListScanFindings(scans)
+
+
+def get_compare_scans(scans: ScanRepository = Depends(get_scan_repo)) -> CompareScans:
+    return CompareScans(scans)
+
 
 
 def get_build_project_overview() -> BuildProjectOverview:

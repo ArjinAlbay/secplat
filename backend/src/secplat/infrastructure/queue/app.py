@@ -27,6 +27,11 @@ def create_celery_app() -> Celery:
                 "schedule": crontab(hour=3, minute=0, day_of_week=0),
                 "options": {"queue": "scans"},
             },
+            "weekly-scheduled-audits": {
+                "task": "secplat.scan.scheduled_weekly",
+                "schedule": crontab(hour=3, minute=30, day_of_week=0),
+                "options": {"queue": "scans"},
+            },
         },
         timezone="UTC",
         enable_utc=True,

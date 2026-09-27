@@ -55,6 +55,23 @@ export type Finding = {
   last_seen_at: string;
 };
 
+export type ScanDiffSummary = {
+  new_count: number;
+  fixed_count: number;
+  unchanged_count: number;
+  current_total: number;
+  previous_total: number;
+};
+
+export type ScanDiff = {
+  base_scan_id: string;
+  target_scan_id: string | null;
+  summary: ScanDiffSummary;
+  new_findings: Finding[];
+  fixed_findings: Finding[];
+  unchanged_findings: Finding[];
+};
+
 export type ScanResult = {
   id: number;
   tool: string;
@@ -274,6 +291,8 @@ export const api = {
   cancelScan: (id: string) => request<Scan>(`/scans/${id}/cancel`, { method: "POST" }),
   listFindings: (id: string, severity?: string) =>
     request<Finding[]>(`/scans/${id}/findings${severity ? `?severity=${severity}` : ""}`),
+  getScanDiff: (id: string, targetScanId?: string) =>
+    request<ScanDiff>(`/scans/${id}/diff${targetScanId ? `?target_scan_id=${targetScanId}` : ""}`),
   getWorkspace: () => request<WorkspaceResponse>("/workspace"),
   listResults: (id: string) => request<ScanResult[]>(`/scans/${id}/results`),
   getOverview: () => request<OverviewData>("/reports/overview?format=json"),

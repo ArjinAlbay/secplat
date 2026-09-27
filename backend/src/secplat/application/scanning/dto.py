@@ -313,3 +313,21 @@ class ScanResultOut(BaseModel):
     @classmethod
     def from_view(cls, view: ScanResultView) -> ScanResultOut:
         return cls(tool=view.tool, raw=dict(view.raw), created_at=view.created_at)
+
+
+class ScanDiffSummary(BaseModel):
+    new_count: int
+    fixed_count: int
+    unchanged_count: int
+    current_total: int
+    previous_total: int
+
+
+class ScanDiffOut(BaseModel):
+    base_scan_id: uuid.UUID
+    target_scan_id: uuid.UUID | None
+    summary: ScanDiffSummary
+    new_findings: list[FindingOut]
+    fixed_findings: list[FindingOut]
+    unchanged_findings: list[FindingOut]
+

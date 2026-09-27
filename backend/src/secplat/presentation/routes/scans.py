@@ -26,12 +26,14 @@ from secplat.application.scanning.dto import (
     ReconPipelineRequest,
     ReconPipelineResponse,
     ScanCreate,
+    ScanDiffOut,
     ScanOut,
     ScanResultOut,
     SecurityScoreOut,
     TargetRefOut,
 )
 from secplat.application.scanning.queries import (
+    CompareScans,
     GetScan,
     ListProjectScans,
     ListRecentScans,
@@ -50,6 +52,7 @@ from secplat.presentation.deps import (
     get_build_project_overview,
     get_build_project_security_score,
     get_cancel_scan,
+    get_compare_scans,
     get_delete_scan,
     get_get_scan,
     get_list_project_scans,
@@ -248,6 +251,27 @@ def list_scan_findings(
 ) -> list[FindingOut]:
     views = handler(ScanId(scan_id), severity, limit, offset)
     return [FindingOut.from_view(view) for view in views]
+
+
+@router.get("/scans/{scan_id}/diff", response_model=ScanDiffOut)
+def get_scan_diff(
+    scan_id: uuid.UUID,
+    target_scan_id: uuid.UUID | None = Query(None),
+    handler: CompareScans = Depends(get_compare_scans),
+) -> ScanDiffOut:
+    diff_data = handler(
+        ScanId(scan_id),
+        ScanId(target_scan_id) if target_scan_id else None,
+    )
+    return ScanDiffOut(
+        base_scan_id=diff_data["base_scan_id"],  # type: ignore
+        target_scan_id=diff_data["target_scan_id"],  # type: ignore
+        summary=diff_data["summary"],  # type: ignore
+        new_findings=[FindingOut.from_view(f) for f in diff_data["new_findings"]],  # type: ignore
+        fixed_findings=[FindingOut.from_view(f) for f in diff_data["fixed_findings"]],  # type: ignore
+        unchanged_findings=[FindingOut.from_view(f) for f in diff_data["unchanged_findings"]],  # type: ignore
+    )
+
 
 
 @router.get("/reports/overview")

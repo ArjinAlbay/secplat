@@ -37,6 +37,12 @@ class FindingView:
     first_seen_at: datetime | None = None
     last_seen_at: datetime | None = None
 
+    @property
+    def fingerprint(self) -> str:
+        key = f"{self.template_id}|{self.matched_at or self.host}"
+        return hashlib.sha256(key.encode()).hexdigest()
+
+
 
 @dataclass(frozen=True, slots=True)
 class ScanResultView:

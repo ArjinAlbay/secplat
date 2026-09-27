@@ -282,3 +282,64 @@ def update_templates() -> None:
         logger.error("nuclei template update failed: %s", result.stderr[-2000:])
     else:
         logger.info("nuclei templates updated")
+
+
+@app.task(name="secplat.scan.scheduled_weekly")
+def scheduled_weekly_scans() -> None:
+    session = session_factory()()
+    try:
+        from secplat.application.scanning.commands import StartCodebasePipeline, StartReconPipeline
+        from secplat.domain.scanning.value_objects import TargetKind
+        from secplat.infrastructure.persistence.repositories import (
+            SqlAlchemyProjectRepository,
+        )
+        from secplat.infrastructure.queue.celery_queue import CeleryTaskQueue
+
+        project_repo = SqlAlchemyProjectRepository(session)
+        queue = CeleryTaskQueue()
+
+        projects = project_repo.list()
+        logger.info("Starting weekly scheduled audits for %d projects", len(projects))
+
+        for project in projects:
+            targets = project_repo.list_targets(project.id)
+            for target in targets:
+                if not target.is_active:
+                    continue
+                try:
+                    if target.ref.kind in (TargetKind.DOMAIN, TargetKind.URL):
+                        logger.info(
+                            "Triggering weekly recon pipeline for project %s target %s",
+                            project.name,
+                            target.ref.value,
+                        )
+                        from secplat.application.scanning.dto import ReconPipelineRequest
+
+                        handler = StartReconPipeline(project_repo, queue)
+                        handler(
+                            project.id,
+                            ReconPipelineRequest(target_id=target.id),
+                        )
+                    elif target.ref.kind in (TargetKind.DIRECTORY, TargetKind.GIT_URL):
+                        logger.info(
+                            "Triggering weekly codebase audit pipeline for project %s target %s",
+                            project.name,
+                            target.ref.value,
+                        )
+                        from secplat.application.scanning.dto import CodebasePipelineRequest
+
+                        handler = StartCodebasePipeline(project_repo, queue)
+                        handler(
+                            project.id,
+                            CodebasePipelineRequest(target_id=target.id),
+                        )
+                except Exception as e:
+                    logger.exception(
+                        "Failed to trigger weekly scan for project %s target %s: %s",
+                        project.id,
+                        target.id,
+                        e,
+                    )
+    finally:
+        session.close()
+

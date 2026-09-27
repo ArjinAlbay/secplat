@@ -10,6 +10,7 @@ import {
   type Finding,
   type Project,
   type Scan,
+  type ScanDiff,
   type ScanResult,
   type Severity,
 } from "@/lib/api";
@@ -66,9 +67,13 @@ export default function ScanDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [results, setResults] = useState<ScanResult[]>([]);
+  const [diff, setDiff] = useState<ScanDiff | null>(null);
+  const [activeTab, setActiveTab] = useState<"findings" | "diff" | "raw">("findings");
+  const [diffTab, setDiffTab] = useState<"new" | "fixed" | "unchanged">("new");
   const [loading, setLoading] = useState(true);
   const [findingsLoading, setFindingsLoading] = useState(false);
   const [resultsLoading, setResultsLoading] = useState(false);
+  const [diffLoading, setDiffLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filters & Search for findings
@@ -99,20 +104,24 @@ export default function ScanDetailPage() {
             .catch(() => setProject(null));
         }
 
-        // Fetch findings and results if scan has finished or has stats
+        // Fetch findings, results, and diff if scan has finished or has stats
         if (isTerminal(scanData.status) || (scanData.stats?.findings ?? 0) > 0) {
           if (!silent) {
             setFindingsLoading(true);
             setResultsLoading(true);
+            setDiffLoading(true);
           }
-          const [findingsData, resultsData] = await Promise.all([
+          const [findingsData, resultsData, diffData] = await Promise.all([
             api.listFindings(scanId),
             api.listResults(scanId).catch(() => []),
+            api.getScanDiff(scanId).catch(() => null),
           ]);
           setFindings(findingsData);
           setResults(resultsData);
+          setDiff(diffData);
           setFindingsLoading(false);
           setResultsLoading(false);
+          setDiffLoading(false);
         }
       } catch (err) {
         if (!silent) {
@@ -469,22 +478,228 @@ export default function ScanDetailPage() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
-      {/* ── FINDINGS INVESTIGATION CENTER ──────────────────────────────── */}
+      {/* ── MAIN SCAN TABS (Findings vs Weekly Comparison Diff) ────────── */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div className="card-header" style={{ padding: "18px 20px" }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 15 }}>Security Findings & Vulnerabilities</h2>
-            <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>
-              Detailed vulnerability reports and evidence detected by {scan.tool}
-            </p>
+      <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
+        <button
+          type="button"
+          className={`btn ${activeTab === "findings" ? "btn-primary" : "btn-secondary"} btn-sm`}
+          onClick={() => setActiveTab("findings")}
+        >
+          Findings ({findings.length})
+        </button>
+        <button
+          type="button"
+          className={`btn ${activeTab === "diff" ? "btn-primary" : "btn-secondary"} btn-sm`}
+          onClick={() => setActiveTab("diff")}
+        >
+          Comparison & Diff Analysis {diff ? `(${diff.summary.new_count > 0 ? `+${diff.summary.new_count} new` : "Clean"})` : ""}
+        </button>
+      </div>
+
+      {activeTab === "diff" ? (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="card-header" style={{ padding: "18px 20px" }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 15 }}>Weekly Scan Comparison & Vulnerability Delta</h2>
+              <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>
+                {diff?.target_scan_id
+                  ? `Comparing current scan with baseline scan #${diff.target_scan_id.slice(0, 8)}`
+                  : "No earlier baseline scan was found for this target. This scan serves as the baseline."}
+              </p>
+            </div>
           </div>
-          {findings.length > 0 && (
-            <span className="muted" style={{ fontSize: 12 }}>
-              Showing {filteredFindings.length} of {findings.length} findings
-            </span>
+
+          {diffLoading ? (
+            <div style={{ padding: 32 }}>
+              <div className="skeleton" style={{ height: 60, borderRadius: 6, marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 120, borderRadius: 6 }} />
+            </div>
+          ) : !diff || !diff.target_scan_id ? (
+            <div style={{ padding: "40px 24px", textAlign: "center" }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: "50%",
+                  background: "rgba(88, 166, 255, 0.12)",
+                  color: "var(--accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 12px",
+                }}
+              >
+                <ClockIcon width={22} height={22} />
+              </div>
+              <p style={{ fontWeight: 600, fontSize: 15, margin: "0 0 4px" }}>Initial Baseline Scan</p>
+              <p className="muted" style={{ fontSize: 13, margin: 0, maxWidth: 460, marginLeft: "auto", marginRight: "auto" }}>
+                There is no previous scan for this target yet. Subsequent weekly scheduled scans will automatically compare against this run to detect new, resolved, and persistent vulnerabilities.
+              </p>
+            </div>
+          ) : (
+            <div>
+              {/* Diff Summary Cards */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                  gap: 12,
+                  padding: "16px 20px",
+                  background: "var(--bg-subtle)",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                <div className="card" style={{ padding: 14, margin: 0 }}>
+                  <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600 }}>New (Introduced)</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: diff.summary.new_count > 0 ? "var(--critical)" : "var(--text)", marginTop: 4 }}>
+                    +{diff.summary.new_count}
+                  </div>
+                </div>
+                <div className="card" style={{ padding: 14, margin: 0 }}>
+                  <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600 }}>Fixed (Resolved)</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: diff.summary.fixed_count > 0 ? "var(--success)" : "var(--text)", marginTop: 4 }}>
+                    -{diff.summary.fixed_count}
+                  </div>
+                </div>
+                <div className="card" style={{ padding: 14, margin: 0 }}>
+                  <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600 }}>Persistent (Unchanged)</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text-muted)", marginTop: 4 }}>
+                    {diff.summary.unchanged_count}
+                  </div>
+                </div>
+                <div className="card" style={{ padding: 14, margin: 0 }}>
+                  <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600 }}>Current vs Previous</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)", marginTop: 8 }}>
+                    {diff.summary.current_total} vs {diff.summary.previous_total}
+                  </div>
+                </div>
+              </div>
+
+              {/* Diff Subtabs */}
+              <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border)", display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  className={`pill-tab${diffTab === "new" ? " active" : ""}`}
+                  style={diffTab === "new" ? { background: "rgba(248, 81, 73, 0.15)", color: "var(--critical)" } : undefined}
+                  onClick={() => setDiffTab("new")}
+                >
+                  🔴 New Flaws ({diff.new_findings.length})
+                </button>
+                <button
+                  type="button"
+                  className={`pill-tab${diffTab === "fixed" ? " active" : ""}`}
+                  style={diffTab === "fixed" ? { background: "rgba(63, 185, 80, 0.15)", color: "var(--success)" } : undefined}
+                  onClick={() => setDiffTab("fixed")}
+                >
+                  🟢 Resolved Flaws ({diff.fixed_findings.length})
+                </button>
+                <button
+                  type="button"
+                  className={`pill-tab${diffTab === "unchanged" ? " active" : ""}`}
+                  onClick={() => setDiffTab("unchanged")}
+                >
+                  🟡 Persistent ({diff.unchanged_findings.length})
+                </button>
+              </div>
+
+              {/* Diff Findings Table */}
+              {(() => {
+                const activeFindings =
+                  diffTab === "new"
+                    ? diff.new_findings
+                    : diffTab === "fixed"
+                    ? diff.fixed_findings
+                    : diff.unchanged_findings;
+
+                if (activeFindings.length === 0) {
+                  return (
+                    <div style={{ padding: "32px 20px", textAlign: "center" }}>
+                      <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+                        {diffTab === "new"
+                          ? "No new vulnerabilities introduced compared to the previous scan! 🎉"
+                          : diffTab === "fixed"
+                          ? "No previous vulnerabilities were resolved in this scan."
+                          : "No persistent vulnerabilities."}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="table-wrap" style={{ border: "none", borderRadius: 0 }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style={{ width: 100 }}>Severity</th>
+                          <th>Finding Title</th>
+                          <th>Matched Location</th>
+                          <th>Template / Rule</th>
+                          <th>Detected In</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeFindings.map((f, idx) => (
+                          <tr key={`${f.template_id}-${f.matched_at}-${idx}`}>
+                            <td>
+                              <SeverityBadge severity={f.severity} />
+                            </td>
+                            <td>
+                              <span style={{ fontWeight: 600 }}>{f.name}</span>
+                            </td>
+                            <td>
+                              <code>{f.matched_at}</code>
+                            </td>
+                            <td>
+                              <code>{f.template_id}</code>
+                            </td>
+                            <td>
+                              <span
+                                className="badge"
+                                style={{
+                                  background:
+                                    diffTab === "new"
+                                      ? "rgba(248, 81, 73, 0.15)"
+                                      : diffTab === "fixed"
+                                      ? "rgba(63, 185, 80, 0.15)"
+                                      : "var(--panel)",
+                                  color:
+                                    diffTab === "new"
+                                      ? "var(--critical)"
+                                      : diffTab === "fixed"
+                                      ? "var(--success)"
+                                      : "var(--text-muted)",
+                                }}
+                              >
+                                {diffTab === "new" ? "New" : diffTab === "fixed" ? "Resolved" : "Unchanged"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
           )}
         </div>
+      ) : (
+        /* ── Findings Investigation Center ── */
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="card-header" style={{ padding: "18px 20px" }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 15 }}>Security Findings & Vulnerabilities</h2>
+              <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>
+                Detailed vulnerability reports and evidence detected by {scan.tool}
+              </p>
+            </div>
+            {findings.length > 0 && (
+              <span className="muted" style={{ fontSize: 12 }}>
+                Showing {filteredFindings.length} of {findings.length} findings
+              </span>
+            )}
+          </div>
 
         {/* ── Filter Bar for Findings ── */}
         {!active && findings.length > 0 && (
@@ -742,6 +957,7 @@ export default function ScanDetailPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* ── RAW SCANNER OUTPUT ─────────────────────────────────────────── */}
