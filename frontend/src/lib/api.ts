@@ -1,5 +1,8 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined" ? "" : "http://api:8000");
 const V1 = `${API_BASE}/api/v1`;
+
 
 export type TargetKind = "domain" | "ip" | "cidr" | "url" | "path";
 export type ToolName = "nuclei" | "subfinder" | "semgrep" | "trivy" | "gitleaks" | "checkov" | "httpx";
