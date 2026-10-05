@@ -1,13 +1,13 @@
 FROM python:3.13-slim-bookworm
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.14 /uv /uvx /usr/local/bin/
-
 ARG NUCLEI_VERSION=3.11.1
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl unzip \
         libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libglib2.0-0 \
         libharfbuzz0b libffi8 libcairo2 fonts-dejavu-core; \
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh; \
+    /usr/local/bin/uv --version; \
     base="https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}"; \
     cd /tmp; \
     curl -fsSL -O "${base}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip"; \
